@@ -1,0 +1,451 @@
+---
+title: "Differential Analysis on methylome"
+author: "Florent Chuffart"
+date: "`r Sys.Date()`"
+output: 
+  rmarkdown::html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+---
+
+
+```{r, echo=FALSE, eval=TRUE}
+knitr::opts_chunk$set(collapse=TRUE, comment = "#>", fig.width=9, fig.height=6, eval=TRUE, echo=FALSE, results="hide")
+```
+
+
+  
+```{r}
+source("config")
+design = read.table("sample.txt", sep=";", header=TRUE, stringsAsFactors=FALSE)
+rownames(design) = design$sampleID
+design
+cov_files = paste0("~/projects/", datashare, "/", gse, "/", design$bed_file)
+
+if (! exists("mgzread.table")) {
+  gzread.table = function (f, cov_thresh, ...) {
+    print(f)
+    d = read.table(gzfile(f), ...)
+    d[d[,1]=="chrM",1] = "chrMT"
+    colnames(d) = c("chr", "pos", "pos2", "meth", "nb_meth", "nb_umeth")
+    rownames(d) = paste0(d$chr, "_", d$pos)
+    d$cov = d$nb_meth + d$nb_umeth
+    d[d$cov>=cov_thresh,]
+  }
+  mgzread.table = memoise::memoise(gzread.table)
+}
+
+cov_threshs = c(5, 10, 20, 30, 40, 50)
+for ( cov_thresh in cov_threshs) {
+  print(cov_thresh)
+  covs = lapply(cov_files, mgzread.table, stringsAsFactors=FALSE, cov_thresh=cov_thresh)
+}
+
+cov_thresh = 30
+foo = mgzread.table(cov_files[1], stringsAsFactors=FALSE, cov_thresh=cov_thresh)
+head(foo)
+tail(foo)
+table(foo$chr)
+
+for (cov_thresh in cov_threshs) {
+  covs = lapply(cov_files, mgzread.table, stringsAsFactors=FALSE, cov_thresh=cov_thresh)
+  table(covs[[1]]$chr)
+  names(covs) = design$sampleID
+  
+  idx2 =   unique(unlist(lapply(covs, rownames)))
+  length(idx2)
+
+  # Remove where no difference
+  foo = matrix(NA, nrow=length(idx2), ncol=length(covs))
+  dim(foo)
+  rownames(foo) = idx2
+  for (i in 1:length(covs)) {
+    print(i)
+    d = covs[[i]]
+    head(d)
+    idx = i
+    tmp = as.matrix(d[rownames(d),4])
+    foo[rownames(d),idx] = tmp
+  }
+  dim(foo)
+  unique_naomit = function(v) {
+    unique(na.omit(v))
+    # unique(v[!is.na(v)]
+  }
+  bar = epimedtools::monitored_apply(foo, 1, unique_naomit, mod=10000)
+  baz = sapply(bar, length)
+  table(baz)
+  idx3 = names(baz)[baz>1]
+  print(paste0("#CpG with differences: ", length(idx3)))
+
+
+  # Remove where less than XXX replicates
+  nb_rep_min = 3
+  idx4s = lapply(unique(design$treatment), function(cond) {
+    card_cond = sum(design$treatment==cond)
+    foo = matrix(NA, nrow=length(idx3), ncol=card_cond)
+    dim(foo)
+    rownames(foo) = idx3
+    colnames(foo) = design[design$treatment==cond,]$sampleID
+    for (id in colnames(foo)) {
+      print(id)
+      d = covs[[id]]
+      head(d)
+      idx_pos = intersect(rownames(d), idx3)
+      tmp = as.matrix(d[idx_pos,4])
+      foo[idx_pos,id] = tmp
+    }
+    dim(foo)
+    bar = epimedtools::monitored_apply(!is.na(foo), 1, sum, mod=10000)
+    table(bar)
+    idx4 = names(bar)[bar>=nb_rep_min]
+    idx4
+  })
+  idx5 = do.call(epimedtools::intersect_rec, idx4s)
+  print(paste0("#CpG with at least nb_rep_min in all conditions: ", length(idx5)))    
+
+
+  # Fill matrix for ewas
+  data_for_ewas = matrix(NA, nrow=length(idx5), ncol=nrow(design))
+  dim(data_for_ewas)
+  rownames(data_for_ewas) = idx5
+  colnames(data_for_ewas) = design$sampleID
+
+  for (id in colnames(data_for_ewas)) {
+    print(id)
+    d = covs[[id]]
+    head(d)
+    idx_pos = intersect(rownames(d), rownames(data_for_ewas))
+    data_for_ewas[idx_pos,id] = d[idx_pos,]$meth
+  }
+  dim(data_for_ewas)
+  
+  # EWAS
+  if (!exists("cl")) {
+    nb_cores = parallel::detectCores()
+    cl  = parallel::makeCluster(nb_cores,  type="FORK")
+    # parallel::stopCluster(cl)
+  }
+  ewas = parallel::parApply(cl, data_for_ewas, 1, function(l) { #})
+  # ewas = epimedtools::monitored_apply(mod=1000, data_for_ewas, 1, function(l) { #})
+    # ({
+    # l = data_for_ewas[1,]
+    idx_cond1 = which(design[colnames(data_for_ewas),]$treatment==unique(design$treatment)[1])
+    idx_cond2 = which(design[colnames(data_for_ewas),]$treatment==unique(design$treatment)[2])    
+    beta = mean(l[idx_cond1], na.rm=TRUE) - mean(l[idx_cond2], na.rm=TRUE)
+    # test t
+    ttest = try(t.test(l[idx_cond1], l[idx_cond2]), silent=TRUE)
+    if (attributes(ttest)$class == "try-error") {
+      pval_t = 1
+    } else{
+      pval_t = ttest$p.value      
+    }
+    # wilcox
+    wtest = wilcox.test(l[idx_cond1], l[idx_cond2])
+    pval_w = wtest$p.value
+    # robust regression
+    meth = l[c(idx_cond1, idx_cond2)]
+    treatment = design[c(idx_cond1, idx_cond2),]$treatment
+    rtest = MASS::rlm(meth~treatment, maxit=400)  
+    beta_r = rtest$coefficients[[2]]
+    pval_r = survey::regTermTest(rtest, "treatment", null=NULL,df=Inf, method=c("Wald"))$p
+    nb_cond1=sum(!is.na(l[idx_cond1]))
+    nb_cond2=sum(!is.na(l[idx_cond2]))
+    ret = c(pval_t=pval_t, pval_w=pval_w, pval_r=pval_r, beta=beta, beta_r=beta_r, nb_cond1=nb_cond1, nb_cond2=nb_cond2)
+    ret
+  })
+  # layout(matrix(1:6, 2), respect=TRUE)
+  # plot(ewas[1,], -log10(ewas[2,]))
+  # plot(-log10(ewas[2,]), -log10(ewas[3,]), col=(ewas[2,]<0.05 | ewas[3,]<0.05)+1)
+  # idx6 = colnames(ewas)[ewas[2,]<0.05 | ewas[3,]<0.05]
+  # print(paste0("#CpG of interest: ", length(idx6)))
+
+  tests = c("ttest", "wilco", "rtest")
+  for (test in tests) {
+    suffix=paste0(test, "_covthresh", cov_thresh)
+    res_EWAS = t(ewas)[,c(4,which(test==tests))]      
+    head(res_EWAS)
+    tmp_split = strsplit(rownames(res_EWAS), "_")
+    tmp_split = do.call(rbind, tmp_split)
+    methpf = data.frame(id=rownames(res_EWAS), chr=tmp_split[,1] ,pos=as.numeric(tmp_split[,2]) ,stringsAsFactors=FALSE)
+    rownames(methpf) = methpf$id
+    methpf = methpf[,-1]
+    bedfile = methpf
+    colnames(bedfile) = c("chrom","start")
+    bedfile$end = bedfile$start + 1
+    head(bedfile)
+
+    ewasforcombp2 = merge(bedfile,res_EWAS, by=0)
+    ewasforcombp2 = as.data.frame(ewasforcombp2)
+    rownames(ewasforcombp2) = ewasforcombp2[,1]
+    ewasforcombp2 = ewasforcombp2[,-1]
+    ewasforcombp2 = ewasforcombp2[order(ewasforcombp2$chrom, ewasforcombp2$start),]
+    head(ewasforcombp2)
+    dim(ewasforcombp2)
+
+    dir.create(path="ewas_combp", showWarnings=FALSE) 
+    print("writing ewasforcombp...")
+    head(ewasforcombp2)
+    write.table(ewasforcombp2, file=paste0("ewas_combp/ewasforcombp_",suffix,".bed"), sep="\t", quote=FALSE,row.names=FALSE, col.names=TRUE)
+    print("done.")
+
+    quantile(ewasforcombp2[,5])
+
+    print("launching comb-p...")
+    cmd = "/summer/epistorage/miniconda3/bin/python"
+    arg = paste0("/summer/epistorage/opt/combined-pvalues/cpv/comb-p pipeline --no-fdr -c 5 --seed 0.0001 --dist 1000 -p ewas_combp/dmrbycombp1000_",suffix," --region-filter-p 0.05 --region-filter-n 2 ewas_combp/ewasforcombp_",suffix,".bed")  
+    print(paste(cmd, arg))
+    system2(cmd, arg)
+    print("done.")    
+  }
+}
+
+
+
+
+
+
+
+
+stop("EFN")
+
+
+
+
+
+files = list.files("ewas_combp", full.names=TRUE)
+foo = read.table(gzfile(files[1]))
+foo = lapply(files, function(f) {
+  read.table(gzfile(f))
+})
+
+fact = do.call(rbind,strsplit(files, "_|\\."))
+test = fact[,3]
+cov = as.numeric(substr(fact[,4], 10, 100))
+cov
+ndmr = sapply(foo, nrow)
+
+
+d = data.frame(files=files, test=test, cov=cov, ndmr=ndmr)
+d = d[order(d$test, d$cov),]
+boxplot(ndmr~cov+test, d, las=2)
+
+
+foo = read.table(gzfile(files[1]))
+head(foo)
+colnames(foo) = c("chr", "start", "end", "pval1", "nb_probe", "z_p", "z_sidak_p")
+foo$len = foo$end - foo$start
+plot(density(foo$nb_probe))
+plot(foo$nb_probe, foo$len)
+plot(-log10(foo$pval1), -log10(foo$z_p))
+plot(-log10(foo$z_p), -log10(foo$z_sidak_p))
+
+d$files = as.character(d$files)
+layout(matrix(1:12,2, byrow=TRUE))
+lapply(d$files, function(file) {
+  # file = d$files[1]
+  foo = read.table(gzfile(file))
+  head(foo)
+  colnames(foo) = c("chr", "start", "end", "pval1", "nb_probe", "z_p", "z_sidak_p")
+  foo$len = foo$end - foo$start
+  main= substr(file,27, 44)  
+  # plot(density(foo$nb_probe), main=main)
+  # plot(foo$nb_probe, foo$len)
+  # plot(-log10(foo$pval1), -log10(foo$z_p))
+  plot(-log10(foo$z_p), -log10(foo$z_sidak_p), main=main)
+  abline(h=-log10(0.1))
+})
+
+
+file = "ewas_combp/dmrbycombp1000_ttest_covthresh5.regions-p.bed.gz"  
+file = "ewas_combp/dmrbycombp1000_ttest_covthresh10.regions-p.bed.gz" 
+foo = read.table(gzfile(file), header=TRUE, comment="@")
+head(foo)
+foo$len = foo$end - foo$start
+main= substr(file,27, 44)  
+# plot(density(foo$nb_probe), main=main)
+# plot(foo$nb_probe, foo$len)
+# plot(-log10(foo$pval1), -log10(foo$z_p))
+plot(-log10(foo$z_p), -log10(foo$z_sidak_p), main=main)
+abline(h=-log10(0.1))
+
+foo[-log10(foo$z_sidak_p) > 0.3,]
+
+
+
+# Aldh9a1 chr1:167,356,405-167,356,862
+# Ank3 chr10:69,939,227-69,944,128
+# Hmga2 chr10:120,422,358-120,422,418
+# Impact chr18:12,959,559-12,986,779 https://www.ncbi.nlm.nih.gov/gene/16210
+# chr3 121890900 121890970
+# Glt1d1 chr5:127,690,079-127,692,926
+# Dchs1 chr7:105,757,184-105,768,095
+# Tmem219 chr7:126,898,245-126,898,312
+# Zfhx3 chr8 108732770 108732866
+
+# /summer/epistorage/miniconda3/bin/python /summer/epistorage/opt/combined-pvalues/cpv/comb-p pipeline \
+#   --no-fdr \
+#   -c 4 --seed 0.1 --dist 1000 -p ewas_combp/dmrbycombp1000_cov_thresh_30 --region-filter-p 0.1 --region-filter-n 2 ewas_combp/ewasforcombp_cov_thresh_30.bed
+#
+#
+# zcat ewas_combp/dmrbycombp1000_cov_thresh_30.regions-p.bed.gz | wc
+
+foo = read.table(gzfile("ewas_combp/dmrbycombp1000_cov_thresh_30.regions-p.bed.gz"))
+head(foo)
+foo$len = foo[,3] - foo[,2]
+
+foo[order(foo[,5], foo[,6]),]
+#   dmr = read.table(dmr_file, header=TRUE, sep="\t",stringsAsFactors=FALSE, quote="", comment="$")
+#   print(paste0("seed ", seed, ", we have ", nrow(dmr), " DMRs"))
+#   return(nrow(dmr))
+# } else {
+#   warnings(paste0(dmr_file, " does not exist."))
+# }
+
+
+
+
+compute_dmr = function(task) {
+  # seed = task$seed
+  # # print(seed)
+  # suffix = paste0("rnd_", seed)
+  #
+  # # EWAS ref non fumeurs
+  # restabgrotjexavt_file = paste0("ewas_combp/restabgrotjexavt_", suffix, ".rds")
+  # if (!file.exists(restabgrotjexavt_file)) {
+  #   print(paste(restabgrotjexavt_file, " does not exists... exit"))
+  #   return(NULL)
+  # }
+
+  # if (TRUE) {
+  dmr_file = paste0("ewas_combp/dmrbycombp1000_",suffix,".regions-t.bed")
+  if (!file.exists(dmr_file)) {
+    ####################################################################
+    # Préparation fichiers pour comb-p à partir des résultats de l'EWAS
+    ####################################################################
+    restabgrotjexavt = readRDS(restabgrotjexavt_file)
+    res_EWAS = restabgrotjexavt[,c("p_wtest", "z_wtest")]
+    bedfile = annotation.table[,c("chr", "pos")]
+    colnames(bedfile) = c("chrom","start")
+    bedfile$end = bedfile$start + 1
+    ewasforcombp2 = merge(bedfile,res_EWAS, by=0)
+    ewasforcombp2 = as.data.frame(ewasforcombp2)
+    rownames(ewasforcombp2) = ewasforcombp2[,1]
+    ewasforcombp2 = ewasforcombp2[,-c(1,6)]
+    ewasforcombp2 = ewasforcombp2[order(ewasforcombp2$chrom, ewasforcombp2$start),]
+
+    print("writing ewasforcombp...")
+    write.table(ewasforcombp2, file=paste0("ewas_combp/ewasforcombp_",suffix,".bed"), sep="\t", quote=FALSE,row.names=FALSE, col.names=TRUE)
+    print("done.")
+
+
+    print("launching comb-p...")
+    cmd = "/summer/epistorage/miniconda3/bin/python"
+    arg = paste0("/summer/epistorage/opt/combined-pvalues/cpv/comb-p pipeline -c 4 --seed 0.001 --dist 1000 -p ewas_combp/dmrbycombp1000_",suffix," --region-filter-p 0.05 --region-filter-n 2 ewas_combp/ewasforcombp_",suffix,".bed")  
+    print(paste(cmd, arg))
+    system2(cmd, arg)
+    print("done.")
+  }
+  
+  if  (file.exists(dmr_file)) {
+    dmr = read.table(dmr_file, header=TRUE, sep="\t",stringsAsFactors=FALSE, quote="", comment="$")
+    print(paste0("seed ", seed, ", we have ", nrow(dmr), " DMRs"))
+    return(nrow(dmr))
+  } else {
+    warnings(paste0(dmr_file, " does not exist."))
+  }
+  
+  return(dmr_file)
+}
+
+
+
+
+
+
+
+
+
+
+print("Indexing locus by probes...")
+tmp_split = strsplit(idx6, "_")
+tmp_split = do.call(rbind, tmp_split)
+methpf = data.frame(id=idx6, chr=tmp_split[,1] ,pos=as.numeric(tmp_split[,2]) ,stringsAsFactors=FALSE)
+rownames(methpf) = methpf$id
+methpf = methpf[,-1]
+head(methpf)
+pf_chr_colname = "chr"
+pf_pos_colname = "pos"
+chrs = na.omit(unique(feat[,1]))
+table(methpf[[pf_chr_colname]])
+
+feat = readRDS("~/projects/genes/bed_grcm38_transcripts_epimeddb_entrez.rds")
+feat = feat[!is.na(feat$tx_end),]
+feat = feat[nchar(feat$chrom_text) <=5,]
+feat = feat[order(feat[,1], feat[,2]),]
+dim(feat)
+table(feat$type, useNA="ifany")
+table(feat$chrom_text, useNA="ifany")
+
+chrs_indexed_methpf = lapply(chrs, function(chr) {
+  idx = rownames(methpf)[!is.na(methpf[[pf_chr_colname]]) & methpf[[pf_chr_colname]]==chr]  
+  ret = methpf[idx,]
+  print(paste0(chr, " ", length(idx), " probes"))
+  return(ret)
+})
+names(chrs_indexed_methpf) = as.character(chrs)
+
+genes_indexed_probes = epimedtools::monitored_apply(feat, 1, function(f) {
+  chr = as.character(f[[1]])
+  meth_platform = chrs_indexed_methpf[[chr]]
+  ret = dmprocr::get_probe_names(f, meth_platform, pf_chr_colname, pf_pos_colname, 2000, 2000) 
+  return(ret)
+})
+feat$nb_probes = sapply(genes_indexed_probes[rownames(feat)], length)
+
+
+print(table(feat$nb_probes))
+barplot(table(feat$nb_probes), las=2)
+sub_feat = feat[feat$nb_probes >= 1,]
+print(sub_feat[rev(order(sub_feat$nb_probes)),c(1,2,3,5,6, 17)][1:100,])
+
+dim (feat)
+
+
+
+
+# "Gm9833"
+# "BC1"
+# Fads3
+
+# sapply(rownames(feat), function(f_id) {
+#   # f_id = rownames(feat)[1]
+#   sapply(covs, function(cov) {
+#     cov = covs[[1]]
+#     foo = cov[genes_indexed_probes[[f_id]],]
+#     head(foo)
+#
+#   })
+# })
+
+
+
+
+
+
+```
+
+
+
+# Session Information
+
+```{r, results="verbatim"}
+sessionInfo()
+```
+
+
+
+
+
