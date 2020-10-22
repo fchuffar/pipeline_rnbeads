@@ -1,0 +1,7 @@
+bed_file;sampleID;treatment
+SRR9016929_1_trimmed_bismark_bt2_sortedbyname.bismark.cov.gz;SRR9016929;D1WT
+SRR9016930_1_trimmed_bismark_bt2_sortedbyname.bismark.cov.gz;SRR9016930;D1WT
+SRR9016931_1_trimmed_bismark_bt2_sortedbyname.bismark.cov.gz;SRR9016931;D1WT
+SRR9016934_1_trimmed_bismark_bt2_sortedbyname.bismark.cov.gz;SRR9016934;D1KO
+SRR9016935_1_trimmed_bismark_bt2_sortedbyname.bismark.cov.gz;SRR9016935;D1KO
+SRR9016936_1_trimmed_bismark_bt2_sortedbyname.bismark.cov.gz;SRR9016936;D1KO
