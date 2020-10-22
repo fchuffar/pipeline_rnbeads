@@ -1,4 +1,4 @@
-source(config)
+source("config")
 library(RnBeads)
 library(RnBeads.mm10)
 
