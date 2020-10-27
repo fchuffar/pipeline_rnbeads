@@ -33,6 +33,8 @@ oarsub --project epimed  -l /nodes=1,core=32,walltime=06:00:00 "export PATH=/sum
 oarstat -fj ${OAR_JOB_ID}
 tail -f OAR.${OAR_JOB_ID}.stdout 
 echo ${project}/results/${gse}/rnbead_results
+mkdir -p ~/projects/${project}/results/${gse}/rnbead_results/tracks_and_tables_data/sites/trackHub_bigWig/${version}/ 
+rsync -auvP cargo:~/projects/${project}/results/${gse}/rnbead_results/tracks_and_tables_data/sites/trackHub_bigWig/${version}/*.bigWig ~/projects/${project}/results/${gse}/rnbead_results/tracks_and_tables_data/sites/trackHub_bigWig/${version}/.
 
 # run ewas
 ssh dahu
@@ -41,20 +43,13 @@ oarstat -fj ${OAR_JOB_ID}
 tail -f OAR.${OAR_JOB_ID}.stdout 
 rsync -auvP cargo:projects/${project}/results/${gse}/ewas_results/ ~/projects/${project}/results/${gse}/ewas_results/
 
-# get bam files
-ssh cargo ls ~/projects/${datashare}/${gse}
-mkdir -p ~/projects/${datashare}/${gse}/
-rsync -auvP cargo:projects/${datashare}/${gse}/*sorted.bam* ~/projects/${datashare}/${gse}/
+# run combp
+ssh dahu
+oarsub --project epimed  -l /nodes=1,core=32,walltime=06:00:00 "export PATH=/summer/epistorage/miniconda3/bin:/summer/epistorage/opt/bin:\$PATH; cd ~/projects/${project}/results/${gse}; Rscript 03_ewas.R";
+rsync -auvP cargo:projects/${project}/results/${gse}/combp_results/*.regions-p.bed.gz ~/projects/${project}/results/${gse}/combp_results/
 
 
 
-
-
-
-
-
-mkdir -p ~/projects/${project}/results/${gse}/rnbead_results/tracks_and_tables_data/sites/trackHub_bigWig/mm10/ 
-rsync -auvP cargo:~/projects/${project}/results/${gse}/rnbead_results/tracks_and_tables_data/sites/trackHub_bigWig/mm10/*.bigWig ~/projects/${project}/results/${gse}/rnbead_results/tracks_and_tables_data/sites/trackHub_bigWig/mm10/.
 
 /Library/Internet\ Plug-Ins/JavaAppletPlugin.plugin/Contents/Home/bin/java -jar /Applications/IGV_2.4.16.app/Contents/Java/igv.jar \
   ~/projects/${project}/results/${gse}/rnbead_results/tracks_and_tables_data/sites/trackHub_bigWig/mm10/rnbeads_sample_01.bigWig \
@@ -63,12 +58,12 @@ rsync -auvP cargo:~/projects/${project}/results/${gse}/rnbead_results/tracks_and
   ~/projects/${project}/results/${gse}/rnbead_results/tracks_and_tables_data/sites/trackHub_bigWig/mm10/rnbeads_sample_04.bigWig \
   ~/projects/${project}/results/${gse}/rnbead_results/tracks_and_tables_data/sites/trackHub_bigWig/mm10/rnbeads_sample_05.bigWig \
   ~/projects/${project}/results/${gse}/rnbead_results/tracks_and_tables_data/sites/trackHub_bigWig/mm10/rnbeads_sample_06.bigWig \
-  /Users/florent/projects/${datashare}/${gse}/SRR9016929_1_trimmed_bismark_bt2_sorted.bam \
-  /Users/florent/projects/${datashare}/${gse}/SRR9016930_1_trimmed_bismark_bt2_sorted.bam \
-  /Users/florent/projects/${datashare}/${gse}/SRR9016931_1_trimmed_bismark_bt2_sorted.bam \
-  /Users/florent/projects/${datashare}/${gse}/SRR9016934_1_trimmed_bismark_bt2_sorted.bam \
-  /Users/florent/projects/${datashare}/${gse}/SRR9016935_1_trimmed_bismark_bt2_sorted.bam \
-  /Users/florent/projects/${datashare}/${gse}/SRR9016936_1_trimmed_bismark_bt2_sorted.bam \
+  /Users/florent/projects/${datashare}/${gse}/SRR3467835_1_trimmed_bismark_bt2_sorted.bam \
+  /Users/florent/projects/${datashare}/${gse}/SRR3467836_1_trimmed_bismark_bt2_sorted.bam \
+  /Users/florent/projects/${datashare}/${gse}/SRR3467837_1_trimmed_bismark_bt2_sorted.bam \
+  /Users/florent/projects/${datashare}/${gse}/SRR3467839_1_trimmed_bismark_bt2_sorted.bam \
+  /Users/florent/projects/${datashare}/${gse}/SRR3467840_1_trimmed_bismark_bt2_sorted.bam \
+  /Users/florent/projects/${datashare}/${gse}/SRR3467841_1_trimmed_bismark_bt2_sorted.bam \
 
 
 
