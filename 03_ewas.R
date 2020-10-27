@@ -113,9 +113,10 @@ for (cov_thresh in cov_threshs) {
       # parallel::stopCluster(cl)
     }
     ewas = parallel::parApply(cl, data_for_ewas, 1, function(l) { #})
-    # ewas = epimedtools::monitored_apply(mod=1000, data_for_ewas, 1, function(l) { #})
+    # ewas = epimedtools::monitored_apply(mod=1, data_for_ewas, 1, function(l) { #})
       # ({
       # l = data_for_ewas[1,]
+      # l = data_for_ewas[1158,]
       idx_cond1 = which(design[colnames(data_for_ewas),]$treatment==unique(design$treatment)[1])
       idx_cond2 = which(design[colnames(data_for_ewas),]$treatment==unique(design$treatment)[2])    
       beta = mean(l[idx_cond1], na.rm=TRUE) - mean(l[idx_cond2], na.rm=TRUE)
@@ -131,10 +132,14 @@ for (cov_thresh in cov_threshs) {
       pval_w = wtest$p.value
       # robust regression
       meth = l[c(idx_cond1, idx_cond2)]
-      treatment = design[c(idx_cond1, idx_cond2),]$treatment
+      treatment = as.factor(design[c(idx_cond1, idx_cond2),]$treatment)
       rtest = MASS::rlm(meth~treatment, maxit=400)  
       beta_r = rtest$coefficients[[2]]
-      pval_r = survey::regTermTest(rtest, "treatment", null=NULL,df=Inf, method=c("Wald"))$p
+      if (is.na(beta_r)) {
+        pval_r = NA
+      } else {        
+        pval_r = survey::regTermTest(rtest, "treatment", null=NULL, df=Inf, method=c("Wald"))$p
+      }
       nb_cond1=sum(!is.na(l[idx_cond1]))
       nb_cond2=sum(!is.na(l[idx_cond2]))
       ret = c(pval_t=pval_t, pval_w=pval_w, pval_r=pval_r, beta=beta, beta_r=beta_r, nb_cond1=nb_cond1, nb_cond2=nb_cond2)
@@ -153,7 +158,7 @@ for (cov_thresh in cov_threshs) {
   ewas = t(readRDS(ewas_filename))
   head(ewas)
   for (pv in colnames(ewas)[1:3]) {
-    plot(density(-log10(ewas[,pv])), main=paste(cov_thresh, pv))      
+    plot(density(na.omit(-log10(ewas[,pv]))), main=paste(cov_thresh, pv))      
   }
 }
 dev.off()
