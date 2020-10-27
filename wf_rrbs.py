@@ -8,24 +8,30 @@ rule target:
     threads: 1
     message: "-- Rule target completed. --"
     input: 
-     "/home/fchuffar/projects/datashare/GSE130735/raw/SRR9016929_1_fastqc.zip",
-     "/home/fchuffar/projects/datashare/GSE130735/raw/SRR9016930_1_fastqc.zip",
-     "/home/fchuffar/projects/datashare/GSE130735/raw/SRR9016931_1_fastqc.zip",
-     "/home/fchuffar/projects/datashare/GSE130735/raw/SRR9016934_1_fastqc.zip",
-     "/home/fchuffar/projects/datashare/GSE130735/raw/SRR9016935_1_fastqc.zip",
-     "/home/fchuffar/projects/datashare/GSE130735/raw/SRR9016936_1_fastqc.zip",
+     "/home/fchuffar/projects/datashare/GSE80959/raw/SRR3467835_1_fastqc.zip",
+     "/home/fchuffar/projects/datashare/GSE80959/raw/SRR3467836_1_fastqc.zip",
+     "/home/fchuffar/projects/datashare/GSE80959/raw/SRR3467837_1_fastqc.zip",
+     "/home/fchuffar/projects/datashare/GSE80959/raw/SRR3467838_1_fastqc.zip",
+     "/home/fchuffar/projects/datashare/GSE80959/raw/SRR3467839_1_fastqc.zip",
+     "/home/fchuffar/projects/datashare/GSE80959/raw/SRR3467840_1_fastqc.zip",
+     "/home/fchuffar/projects/datashare/GSE80959/raw/SRR3467841_1_fastqc.zip",
+     "/home/fchuffar/projects/datashare/GSE80959/raw/SRR3467842_1_fastqc.zip",
+     "/home/fchuffar/projects/datashare/GSE80959/raw/SRR3467843_1_fastqc.zip",
 
-     "/home/fchuffar/projects/datashare/GSE130735/SRR9016929_1_trimmed_bismark_bt2_sortedbyname.bismark.cov.gz",
-     "/home/fchuffar/projects/datashare/GSE130735/SRR9016930_1_trimmed_bismark_bt2_sortedbyname.bismark.cov.gz",
-     "/home/fchuffar/projects/datashare/GSE130735/SRR9016931_1_trimmed_bismark_bt2_sortedbyname.bismark.cov.gz",
-     "/home/fchuffar/projects/datashare/GSE130735/SRR9016934_1_trimmed_bismark_bt2_sortedbyname.bismark.cov.gz",
-     "/home/fchuffar/projects/datashare/GSE130735/SRR9016935_1_trimmed_bismark_bt2_sortedbyname.bismark.cov.gz",
-     "/home/fchuffar/projects/datashare/GSE130735/SRR9016936_1_trimmed_bismark_bt2_sortedbyname.bismark.cov.gz",
+     "/home/fchuffar/projects/datashare/GSE80959/SRR3467835_1_trimmed_bismark_bt2_sortedbyname.bismark.cov.gz",
+     "/home/fchuffar/projects/datashare/GSE80959/SRR3467836_1_trimmed_bismark_bt2_sortedbyname.bismark.cov.gz",
+     "/home/fchuffar/projects/datashare/GSE80959/SRR3467837_1_trimmed_bismark_bt2_sortedbyname.bismark.cov.gz",
+     "/home/fchuffar/projects/datashare/GSE80959/SRR3467838_1_trimmed_bismark_bt2_sortedbyname.bismark.cov.gz",
+     "/home/fchuffar/projects/datashare/GSE80959/SRR3467839_1_trimmed_bismark_bt2_sortedbyname.bismark.cov.gz",
+     "/home/fchuffar/projects/datashare/GSE80959/SRR3467840_1_trimmed_bismark_bt2_sortedbyname.bismark.cov.gz",
+     "/home/fchuffar/projects/datashare/GSE80959/SRR3467841_1_trimmed_bismark_bt2_sortedbyname.bismark.cov.gz",
+     "/home/fchuffar/projects/datashare/GSE80959/SRR3467842_1_trimmed_bismark_bt2_sortedbyname.bismark.cov.gz",
+     "/home/fchuffar/projects/datashare/GSE80959/SRR3467843_1_trimmed_bismark_bt2_sortedbyname.bismark.cov.gz",
 
     shell:"""
-multiqc --force -o /home/fchuffar/projects/datashare/temporize_rrbs_mgx/ -n multiqc_rrbs \
-  /home/fchuffar/projects/datashare/temporize_rrbs_mgx/*.txt \
-  /home/fchuffar/projects/datashare/temporize_rrbs_mgx/raw/*_fastqc.zip \
+multiqc --force -o /home/fchuffar/projects/datashare/GSE80959/ -n multiqc_rrbs \
+  /home/fchuffar/projects/datashare/GSE80959/*.txt \
+  /home/fchuffar/projects/datashare/GSE80959/raw/*_fastqc.zip \
 
 echo workflow \"align_heatshock\" completed at `date` 
           """
