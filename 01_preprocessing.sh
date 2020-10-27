@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 cd ~/projects/temporise/results/GSE80959
-=======
-cd ~/projects/temporise/results/GSE130735
->>>>>>> 14fc6f88b9b300e7b09b8d69be87ddab81dc518e
 source config
 pwd
 rsync -auvP ~/projects/${project}/results/${gse}/ cargo:~/projects/${project}/results/${gse}/
@@ -22,7 +18,6 @@ exit
 
 # launch bismark
 rsync -auvP ~/projects/${project}/results/${gse}/ cargo:~/projects/${project}/results/${gse}/
-<<<<<<< HEAD
 ssh dahu
 snakemake -s ~/projects/${project}/results/${gse}/wf_rrbs.py --cores 50 --cluster "oarsub --project epimed -l nodes=1/core={threads},walltime=6:00:00 " --latency-wait 60 -pn
 ssh cargo ls projects/${datashare}/${gse}
@@ -74,39 +69,3 @@ rsync -auvP cargo:projects/${project}/results/${gse}/combp_results/*.regions-p.b
 
 
 
-
-=======
-ssh dahu
-snakemake -s ~/projects/${project}/results/${gse}/wf_rrbs.py --cores 50 --cluster "oarsub --project epimed -l nodes=1/core={threads},walltime=6:00:00 " --latency-wait 60 -pn
->>>>>>> 14fc6f88b9b300e7b09b8d69be87ddab81dc518e
-
-# launch RnBeads
-ssh dahu
-oarsub --project epimed  -l /nodes=1,core=32,walltime=06:00:00 "export PATH=/summer/epistorage/miniconda3/bin:/summer/epistorage/opt/bin:\$PATH; cd ~/projects/${project}/results/${gse}; Rscript 02_rnbeads_go.R";
-
-<<<<<<< HEAD
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-=======
-# differential analysis
->>>>>>> 14fc6f88b9b300e7b09b8d69be87ddab81dc518e
