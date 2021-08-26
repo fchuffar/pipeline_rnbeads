@@ -1,7 +1,16 @@
-cd ~/projects/temporise/results/GSE80959
+cd ~/projects/lfs_patients_fibroblast/results/epic_lfs_diagenode
 source config
-pwd
 rsync -auvP ~/projects/${project}/results/${gse}/ cargo:~/projects/${project}/results/${gse}/
+
+# organize idat
+mkdir -p ~/projects/${datashare}/${gse}/idat
+cd ~/projects/${datashare}/${gse}/idat
+ls -lha ~/projects/datashare_epistorage/epic_lfs_diagenode/raw/raw_data/205045*/*.idat | wc
+ln -s ~/projects/datashare_epistorage/epic_lfs_diagenode/raw/raw_data/2050*/*.idat .
+ls -lha
+
+rsync -auvP --exclude="raw_data" cargo:~/projects/datashare_epistorage/epic_lfs_diagenode/ ~/projects/datashare_epistorage/epic_lfs_diagenode/
+
 
 # retrieve fastq
 ssh cargo
