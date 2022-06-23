@@ -1,5 +1,7 @@
-cd ~/projects/lfs_patients_fibroblast/results/epic_lfs_diagenode
+cd ~/projects/symer/results/rrbs_symer_mgx
 source config
+echo ${study}
+echo ${project}
 rsync -auvP ~/projects/${project}/results/${gse}/ cargo:~/projects/${project}/results/${gse}/
 
 # organize idat
@@ -12,10 +14,15 @@ ls -lha
 rsync -auvP --exclude="raw_data" cargo:~/projects/datashare_epistorage/epic_lfs_diagenode/ ~/projects/datashare_epistorage/epic_lfs_diagenode/
 
 
-# retrieve fastq
+
+
+
+# retrieve and organize RRBS fastq files
+rsync -auvP ~/projects/${datashare}/${gse}/raw/ cargo:~/projects/${datashare}/${gse}/raw/
 ssh cargo
 mkdir -p ~/projects/${datashare}/${gse}/raw
 cd ~/projects/${datashare}/${gse}/raw
+
 for srr in SRR3467835 SRR3467836 SRR3467837 SRR3467838 SRR3467839 SRR3467840 SRR3467841 SRR3467842 SRR3467843 
 do
   echo ${srr}
@@ -24,6 +31,15 @@ do
   parallel-fastq-dump --threads 16 --tmpdir /dev/shm --gzip --split-files --outdir ./ --sra-id ${srr}
 done
 exit 
+
+cd ~/projects/datashare/${gse}/raw
+md5sum *.fastq.gz > md5sum.bettik.txt 
+diff md5sum.bettik.txt md5sum.mgx.txt 
+rsync -auvP ~/projects/datashare/${gse}/ ~/projects/datashare_epistorage/${gse}/
+cd ~/projects/datashare_epistorage/${gse}/raw
+md5sum *.fastq.gz > md5sum.summer.txt 
+diff md5sum.bettik.txt md5sum.mgx.txt 
+
 
 # launch bismark
 rsync -auvP ~/projects/${project}/results/${gse}/ cargo:~/projects/${project}/results/${gse}/
