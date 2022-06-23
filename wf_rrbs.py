@@ -92,7 +92,7 @@ rule align_PE_with_bismark:
     input:
       trimed_fq_gz_f="{prefix}/{sample}_1_val_1.fq.gz",
       trimed_fq_gz_r="{prefix}/{sample}_2_val_2.fq.gz",
-      bisulfite_genome_dir=directory("/home/fchuffar/projects/datashare/genomes/"+species+"/UCSC/"+rwversion+"/Sequence/WholeGenomeFasta/Bisulfite_Genome")
+      bisulfite_genome_dir="/home/fchuffar/projects/datashare/genomes/"+species+"/UCSC/"+rwversion+"/Sequence/WholeGenomeFasta/Bisulfite_Genome"
     output:"{prefix}/{sample}_1_val_1_bismark_bt2_pe_sorted.bam"
     threads: 16
     shell:    """
@@ -134,9 +134,9 @@ bismark_methylation_extractor --bedGraph --counts -s --no_overlap  --multicore {
 
 rule bismark_genome_preparation:
     input:
-        genome_fasta_dir=directory("{prefix}/genomes/{species}/UCSC/{index}/Sequence/WholeGenomeFasta/"),
+        genome_fasta_dir="{prefix}/genomes/{species}/UCSC/{index}/Sequence/WholeGenomeFasta",
     output:
-        bisulfite_genome_dir=directory("{prefix}/genomes/{species}/UCSC/{index}/Sequence/WholeGenomeFasta/Bisulfite_Genome/"),
+        bisulfite_genome_dir=directory("{prefix}/genomes/{species}/UCSC/{index}/Sequence/WholeGenomeFasta/Bisulfite_Genome"),
     threads: 32
     shell:"""
 export PATH="/summer/epistorage/miniconda3/bin:/summer/epistorage/opt/bin:$PATH"
@@ -144,7 +144,7 @@ export PATH="/summer/epistorage/miniconda3/bin:/summer/epistorage/opt/bin:$PATH"
 # ls -lha ~/projects/datashare/genomes/"""+species+"""/UCSC/"""+rwversion+"""/Sequence/WholeGenomeFasta/Bisulfite_Genome/*
 # ls -lha ~/projects/datashare/genomes/"""+species+"""/UCSC/"""+rwversion+"""/Sequence/WholeGenomeFasta/Bisulfite_Genome/*
 bismark_genome_preparation --parallel `echo "$(({threads} / 2))"` --bowtie2 {input.genome_fasta_dir}
-ls -lha {output.bisulfit_genome_dir}
+ls -lha {output.bisulfite_genome_dir}
     """
 
 
@@ -167,8 +167,7 @@ ls -lha {output.bisulfit_genome_dir}
 # rule align_SR_with_bismark:
 #     input:
 #       trimed_fq_gz="{prefix}/{sample}_trimmed.fq.gz",
-#       # genome_fasta_dir=directory("/home/fchuffar/projects/datashare/genomes/"+species+"/UCSC/"+rwversion+"/Sequence/WholeGenomeFasta/"),
-#       bisulfite_genome_dir=directory("/home/fchuffar/projects/datashare/genomes/"+species+"/UCSC/"+rwversion+"/Sequence/WholeGenomeFasta/Bisulfite_Genome/"),
+#       bisulfite_genome_dir="/home/fchuffar/projects/datashare/genomes/"+species+"/UCSC/"+rwversion+"/Sequence/WholeGenomeFasta/Bisulfite_Genome/",
 #     output:
 #       report=    "{prefix}/{sample}_trimmed_bismark_bt2_SE_report.txt",
 #       bam=       "{prefix}/{sample}_trimmed_bismark_bt2.bam",
