@@ -1,6 +1,6 @@
 cd ~/projects/symer/results/rrbs_symer_mgx
 source config
-echo ${study}
+echo ${gse}
 echo ${project}
 rsync -auvP ~/projects/${project}/results/${gse}/ cargo:~/projects/${project}/results/${gse}/
 
@@ -51,6 +51,25 @@ rsync -auvP cargo:projects/${datashare}/${gse}/multiqc_rrbs* ~/projects/${datash
 rsync -auvP cargo:projects/${datashare}/${gse}/*sorted.bam* ~/projects/${datashare}/${gse}/.
 rsync -auvP cargo:projects/${datashare}/${gse}/*bismark.cov.gz ~/projects/${datashare}/${gse}/.
 open ~/projects/${datashare}/${gse}/multiqc_rrbs.html
+
+
+
+
+
+
+export PATH="/summer/epistorage/miniconda3/bin:/summer/epistorage/opt/bin:$PATH"
+cd /home/fchuffar/projects/datashare/rrbs_symer_mgx/raw/
+bismark --multicore `echo "$((16 / 2))"` -n 1 ~/projects/datashare/genomes/Rattus_norvegicus/UCSC/rn6/Sequence/WholeGenomeFasta/   -1 /home/fchuffar/projects/datashare/rrbs_symer_mgx/raw/F3C7_S19_R1_001_val_1.fq.gz     -2 /home/fchuffar/projects/datashare/rrbs_symer_mgx/raw/F3C7_S19_R2_001_val_2.fq.gz
+samtools sort -@ 16 -T /dev/shm/F3C7_S19 -o /home/fchuffar/projects/datashare/rrbs_symer_mgx/raw/F3C7_S19_R1_001_val_1_bismark_bt2_pe_sorted.bam /home/fchuffar/projects/datashare/rrbs_symer_mgx/raw/F3C7_S19_R1_001_val_1_bismark_bt2_pe.bam
+# rm /home/fchuffar/projects/datashare/rrbs_symer_mgx/raw/F3C7_S19_R1_001_val_1_bismark_bt2_pe.bam
+samtools index /home/fchuffar/projects/datashare/rrbs_symer_mgx/raw/F3C7_S19_R1_001_val_1_bismark_bt2_pe_sorted.bam
+
+
+
+
+
+
+
 
 # launch RnBeads
 ssh dahu

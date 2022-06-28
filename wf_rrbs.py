@@ -17,7 +17,7 @@ rule target:
       "/home/fchuffar/projects/datashare/genomes/"+species+"/UCSC/"+rwversion+"/Sequence/WholeGenomeFasta/Bisulfite_Genome",
       fastqc_files = get_files("/home/fchuffar/projects/"+datashare+"/"+gse+"/raw", ".fastq.gz", "/home/fchuffar/projects/"+datashare+"/"+gse+"/raw", "_fastqc.zip"),
       trim_files = get_files("/home/fchuffar/projects/"+datashare+"/"+gse+"/raw", "_R1_001.fastq.gz", "/home/fchuffar/projects/"+datashare+"/"+gse+"/raw", "_R1_001_val_1.fq.gz"),
-      # bam_files = get_files("/home/fchuffar/projects/"+datashare+"/"+gse+"/raw", "_R1_001.fastq.gz", "/home/fchuffar/projects/"+datashare+"/"+gse+"/raw", "_1_val_1_bismark_bt2_pe_sorted.bam"),
+      bam_files = get_files("/home/fchuffar/projects/"+datashare+"/"+gse+"/raw", "_R1_001.fastq.gz", "/home/fchuffar/projects/"+datashare+"/"+gse+"/raw", "_R1_001_val_1_bismark_bt2_pe_sorted.bam"),
       
       
 
@@ -90,10 +90,12 @@ trim_galore --cores {threads} --fastqc --paired --trim1 {input.fq_gz_f} {input.f
 
 rule align_PE_with_bismark:
     input:
-      trimed_fq_gz_f="{prefix}/{sample}_1_val_1.fq.gz",
-      trimed_fq_gz_r="{prefix}/{sample}_2_val_2.fq.gz",
+      trimed_fq_gz_f="{prefix}/{sample}_R1_001_val_1.fq.gz",
+      trimed_fq_gz_r="{prefix}/{sample}_R2_001_val_2.fq.gz",
       bisulfite_genome_dir="/home/fchuffar/projects/datashare/genomes/"+species+"/UCSC/"+rwversion+"/Sequence/WholeGenomeFasta/Bisulfite_Genome"
-    output:"{prefix}/{sample}_1_val_1_bismark_bt2_pe_sorted.bam"
+    output:
+      bam="{prefix}/{sample}_R1_001_val_1_bismark_bt2_pe_sorted.bam",
+      bai="{prefix}/{sample}_R1_001_val_1_bismark_bt2_pe_sorted.bam.bai"
     threads: 16
     shell:    """
 export PATH="/summer/epistorage/miniconda3/bin:/summer/epistorage/opt/bin:$PATH"
@@ -101,33 +103,33 @@ cd {wildcards.prefix}/
 bismark --multicore `echo "$(({threads} / 2))"` -n 1 ~/projects/datashare/genomes/"""+species+"""/UCSC/"""+rwversion+"""/Sequence/WholeGenomeFasta/ \
   -1 {input.trimed_fq_gz_f} \
     -2 {input.trimed_fq_gz_r}
-samtools sort -@ {threads} -T /dev/shm/{wildcards.sample} -o {wildcards.prefix}/{wildcards.sample}_1_val_1_bismark_bt2_pe_sorted.bam {wildcards.prefix}/{wildcards.sample}_1_val_1_bismark_bt2_pe.bam
-# rm {wildcards.prefix}/{wildcards.sample}_1_val_1_bismark_bt2_pe.bam
-samtools index {output}
+samtools sort -@ {threads} -T /dev/shm/{wildcards.sample} -o {wildcards.prefix}/{wildcards.sample}_R1_001_val_1_bismark_bt2_pe_sorted.bam {wildcards.prefix}/{wildcards.sample}_R1_001_val_1_bismark_bt2_pe.bam
+# rm {wildcards.prefix}/{wildcards.sample}_R1_001_val_1_bismark_bt2_pe.bam
+samtools index {output.bam}
               """
 
 
 
 
-rule extract_meth_info_PE:
-    input:  "{prefix}/{sample}_trimmed_bismark_bt2_sorted.bam"
-    output: 
-      sortedbyname_bam="{prefix}/{sample}_trimmed_bismark_bt2_sortedbyname.bam",
-      splitting_report="{prefix}/{sample}_trimmed_bismark_bt2_sortedbyname_splitting_report.txt",
-      mbias_txt       ="{prefix}/{sample}_trimmed_bismark_bt2_sortedbyname.M-bias.txt",           
-      bedgraph_gz     ="{prefix}/{sample}_trimmed_bismark_bt2_sortedbyname.bedGraph.gz",          
-      cov_gz          ="{prefix}/{sample}_trimmed_bismark_bt2_sortedbyname.bismark.cov.gz",       
-    threads: 8
-    shell:"""
-# cd /summer/epistorage/datashare/temporize_rrbs_mgx/
-# samtools sort -n -@ 16 -T /dev/shm/17_S7_L001_R1_001_trimmed_bismark_bt2_sorted -o 17_S7_L001_R1_001_trimmed_bismark_bt2_sortedbyname.bam 17_S7_L001_R1_001_trimmed_bismark_bt2_sorted.bam
-# bismark_methylation_extractor --bedGraph --counts -s --no_overlap  --multicore 16 17_S7_L001_R1_001_trimmed_bismark_bt2_sortedbyname.bam
-export PATH="/summer/epistorage/miniconda3/bin:/summer/epistorage/opt/bin:$PATH"
-cd {wildcards.prefix}
-samtools sort -n -@ {threads} -T /dev/shm/{wildcards.sample} -o {output.sortedbyname_bam} {input}
-bismark_methylation_extractor --bedGraph --counts -s --no_overlap  --multicore {threads} {output.sortedbyname_bam}
-    """    
-
+# rule extract_meth_info_PE:
+#     input:  "{prefix}/{sample}_trimmed_bismark_bt2_sorted.bam"
+#     output:
+#       sortedbyname_bam="{prefix}/{sample}_trimmed_bismark_bt2_sortedbyname.bam",
+#       splitting_report="{prefix}/{sample}_trimmed_bismark_bt2_sortedbyname_splitting_report.txt",
+#       mbias_txt       ="{prefix}/{sample}_trimmed_bismark_bt2_sortedbyname.M-bias.txt",
+#       bedgraph_gz     ="{prefix}/{sample}_trimmed_bismark_bt2_sortedbyname.bedGraph.gz",
+#       cov_gz          ="{prefix}/{sample}_trimmed_bismark_bt2_sortedbyname.bismark.cov.gz",
+#     threads: 8
+#     shell:"""
+# # cd /summer/epistorage/datashare/temporize_rrbs_mgx/
+# # samtools sort -n -@ 16 -T /dev/shm/17_S7_L001_R1_001_trimmed_bismark_bt2_sorted -o 17_S7_L001_R1_001_trimmed_bismark_bt2_sortedbyname.bam 17_S7_L001_R1_001_trimmed_bismark_bt2_sorted.bam
+# # bismark_methylation_extractor --bedGraph --counts -s --no_overlap  --multicore 16 17_S7_L001_R1_001_trimmed_bismark_bt2_sortedbyname.bam
+# export PATH="/summer/epistorage/miniconda3/bin:/summer/epistorage/opt/bin:$PATH"
+# cd {wildcards.prefix}
+# samtools sort -n -@ {threads} -T /dev/shm/{wildcards.sample} -o {output.sortedbyname_bam} {input}
+# bismark_methylation_extractor --bedGraph --counts -s --no_overlap  --multicore {threads} {output.sortedbyname_bam}
+#     """
+#
 
 
 
