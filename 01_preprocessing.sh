@@ -1,4 +1,4 @@
-cd ~/projects/dnamaging/vignettes/GSE87648
+cd ~/projects/dnamaging/vignettes/GSE124413
 source config
 echo ${gse}
 echo ${project}

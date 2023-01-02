@@ -173,9 +173,9 @@ s$save(s_filename)
 ```{r}
 stop_time = Sys.time()
 info = list(
-  exec_time = round(difftime(stop_time, start_time, units="mins"),1)
   n   = nrow(s$data),
-  p   = ncol(s$data)
+  p   = ncol(s$data),
+  exec_time = round(difftime(stop_time, start_time, units="mins"),1)
 )
 
 saveRDS(info, paste0("info_gseidat2study_",gse,".rds"))
