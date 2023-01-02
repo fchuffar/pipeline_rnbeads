@@ -21,10 +21,13 @@ source("config")
 wd_orig = getwd()
 ```
 
+# Get IDAT from GEO
+
 ```{r}
 epimedtools::download_gse_raw_tar(gse)
-
 ```
+
+# Process IDAT
 
 ```{r}
 library(RnBeads)
@@ -94,7 +97,22 @@ RnBeads::rnb.options(
   # differential.enrichment.go = TRUE
   # differential.enrichment.lola = TRUE,
 
+  # qc.barplots=FALSE,
+  # qc.sample.batch.size = 50,
 
+  qc.boxplots	= FALSE        , 
+  qc.barplots	= FALSE        , 
+  qc.negative.boxplot	= FALSE, 
+  qc.snp.heatmap	= FALSE    , 
+  qc.snp.barplot	= FALSE    , 
+  qc.snp.boxplot	= FALSE    , 
+  qc.snp.distances	= FALSE  , 
+  qc.snp.purity	= FALSE      , 
+  qc.cnv	= FALSE            , 
+  qc.cnv.refbased	= FALSE    , 
+
+
+  
   # export.to.csv        = "yes",
   export.to.bed        = FALSE,
   export.to.trackhub   = NULL,
@@ -119,20 +137,559 @@ parallel.setup(num.cores)
 
 unlink(dir.reports, recursive=TRUE)
 RnBeads::rnb.run.analysis(
-  dir.reports=dir.reports, 
-  sample.sheet=sample.sheet, 
-  data.dir=data.dir, 
-  data.type=data.type,
-  # data.source = data.source,
+  # GEO.acc = gse,
+  sample.sheet=sample.sheet,
+  data.dir=data.dir,
+  # data.source = list(data.dir = data.dir, sample.sheet = sample.sheet),
   # GS.report = NULL,
-  # GEO.acc = NULL,
+
+  dir.reports=dir.reports, 
   # build.index = TRUE,
   save.rdata = FALSE,
   initialize.reports=TRUE
 )
 
+
+
+
 ```
 
+
+```
+
+
+# GEO.acc = gse,
+sample.sheet=sample.sheet
+data.dir=data.dir
+# data.source = list(data.dir = data.dir, sample.sheet = sample.sheet),
+# GS.report = NULL,
+
+dir.reports=dir.reports
+build.index = TRUE,
+save.rdata = FALSE
+initialize.reports=TRUE
+
+
+
+function (dir.reports, data.source = NULL, sample.sheet = NULL,
+    data.dir = NULL, GS.report = NULL, GEO.acc = NULL, data.type = rnb.getOption("import.default.data.type"),
+    initialize.reports = TRUE, build.index = TRUE, save.rdata = TRUE)
+{ 
+    if (all(is.null(c(sample.sheet, data.dir, GS.report, GEO.acc,
+        data.source)))) {
+        stop("one of the sample.sheet, data.dir, GS.report, GEO.acc, data.source should be specified")
+    }
+    if (is.null(data.source)) {
+        if (!is.null(GS.report)) {
+            data.type <- "GS.report"
+            data.source <- GS.report
+        }
+        else if (!is.null(GEO.acc)) {
+            data.type <- "GEO"
+            data.source <- GEO.acc
+        }
+        else if (!is.null(sample.sheet) & !is.null(data.dir)) {
+            data.source <- list(data.dir = data.dir, sample.sheet = sample.sheet)
+        }
+        else if (!is.null(sample.sheet) & is.null(data.dir)) {
+            stop("data directory is missing")
+        }
+        else if (is.null(sample.sheet) & !is.null(data.dir)) {
+            stop("sample sheet is missing")
+        }
+    }
+    if (!(is.character(dir.reports) && length(dir.reports) ==
+        1 && (!is.na(dir.reports)))) {
+        stop("invalid value for dir.reports; expected one-element character")
+    }
+    if (!parameter.is.flag(initialize.reports)) {
+        stop("invalid value for initialize.reports; expected TRUE or FALSE")
+    }
+    if (!parameter.is.flag(build.index)) {
+        stop("invalid value for build.index; expected TRUE or FALSE")
+    }
+    if (initialize.reports) {
+        if (!rnb.initialize.reports(dir.reports)) {
+            stop(paste("Could not initialize reports in", dir.reports,
+                "; make sure this path does not exist."))
+        }
+    }    else if (!isTRUE(file.info(dir.reports)[1, "isdir"])) {
+        stop("invalid value for dir.reports; expected existing directory")
+    }
+    if (logger.isinitialized()) {
+        logfile <- NULL
+        log.file <- NULL
+    }  else {
+        log.file <- "analysis.log"
+        logfile <- c(file.path(dir.reports, log.file), NA)
+    }
+    logger.start("RnBeads Pipeline", fname = logfile)
+    aname <- rnb.getOption("analysis.name")
+    if (!(is.null(aname) || is.na(aname) || nchar(aname) == 0)) {
+        logger.info(c("Analysis Title:", aname))
+    }
+    rm(aname)
+    update.index <- function(dset, rname = "", skip.normalization = FALSE) {
+        if (build.index) {
+            if (is.null(dset)) {
+                export.enabled <- TRUE
+            }
+            else {
+                export.enabled <- rnb.getOption("export.to.csv") ||
+                  rnb.tracks.to.export(dset)
+            }
+            RnBeads:::rnb.build.index.internal(dir.reports, log.file = log.file,
+                export.enabled = export.enabled, current.report = rname,
+                open.index = (rname == ""))
+        }
+    }
+    cat(rnb.options2xml(), file = file.path(dir.reports, "analysis_options.xml"))
+    if (rnb.getOption("import")) {
+        if (is.character(data.source) || is.list(data.source) ||
+            inherits(data.source, "RnBSet")) {
+            update.index(NULL, "data_import", data.type == "bed.dir")
+            result <- rnb.run.import(data.source, data.type,
+                dir.reports)
+            rnb.set <- result$rnb.set
+            rm(result)
+            RnBeads:::RnBeads:::rnb.cleanMem()
+        } else {
+            stop("invalid value for data.source")
+        }
+    } else if (inherits(data.source, "RnBSet")) {
+        rnb.set <- data.source
+    } else if (inherits(data.source, "MethyLumiSet")) {
+        rnb.set <- as(data.source, "RnBeadSet")
+    } else {
+        logger.warning("Cannot proceed with the supplied data.source. Check the option import")
+        logger.completed()
+        if (!is.null(logfile)) {
+            logger.close()
+        }
+        return(invisible(NULL))
+    }
+    if (save.rdata) {
+        analysis.options <- rnb.options()
+        save.rnb.set(rnb.set, file.path(dir.reports, "rnbSet_unnormalized"),
+            archive = rnb.getOption("gz.large.files"))
+        save(analysis.options, file = file.path(dir.reports,
+            "analysis_options.RData"))
+    }
+    if (rnb.getOption("qc")) {
+        update.index(rnb.set, "quality_control")
+        RnBeads:::rnb.cleanMem()
+        rnb.run.qc(rnb.set, dir.reports)
+        
+        
+        
+        
+        # function (rnb.set, dir.reports, init.configuration = !file.exists(file.path(dir.reports,  "configuration")), close.report = TRUE, show.report = FALSE) 
+
+        # rnb.set, dir.reports
+        init.configuration = FALSE#!file.exists(file.path(dir.reports,  "configuration"))
+        close.report = TRUE
+        show.report = FALSE
+        {
+            RnBeads:::validate.module.parameters(rnb.set, dir.reports, close.report, show.report)
+            RnBeads:::module.start.log("Quality Control")
+            report <- RnBeads:::init.pipeline.report("quality_control", dir.reports, init.configuration)
+            optionlist <- rnb.options("qc.boxplots", "qc.barplots", "qc.negative.boxplot")
+            if (inherits(rnb.set, "RnBeadSet")) {
+                snp.options <- list("qc.snp.heatmap", "qc.snp.barplot", 
+                    "qc.snp.boxplot", "qc.snp.distances", "qc.snp.purity", 
+                    "qc.cnv", "qc.cnv.refbased")
+                snp.options <- do.call(rnb.options, snp.options)
+                optionlist <- c(optionlist, snp.options)
+                snp.options <- any(unlist(snp.options, use.names = FALSE))
+            } else {
+                snp.options <- FALSE
+            }
+            report <- RnBeads:::rnb.add.optionlist(report, optionlist)
+            # report <- RnBeads:::rnb.step.quality(rnb.set, report)
+
+
+            # > RnBeads:::rnb.step.quality
+            # function (rnb.set, report)
+            {
+                if (!inherits(rnb.set, "RnBSet")) {
+                    stop("invalid value for rnb.set")
+                }
+                if (!inherits(report, "Report")) {
+                    stop("invalid value for report")
+                }
+                if (inherits(rnb.set, "RnBeadSet")) {
+                    covg.lists <- NULL
+                } else {
+                    covg.lists <- rnb.execute.quality(rnb.set)
+                }
+                # report <- RnBeads:::rnb.section.quality(report, rnb.set, covg.lists = covg.lists)
+                # function (report, rnb.set, qc.boxplots = rnb.getOption("qc.boxplots"),
+                #     qc.barplots = rnb.getOption("qc.barplots"), qc.negative.boxplot = rnb.getOption("qc.negative.boxplot"),
+                #     qc.coverage.plots = rnb.getOption("qc.coverage.plots"), qc.coverage.histograms = rnb.getOption("qc.coverage.histograms"),
+                #     qc.coverage.violins = rnb.getOption("qc.coverage.violins"),
+                #     qc.coverage.threshold.plot = rnb.getOption("qc.coverage.threshold.plot"),
+                #     covg.lists = NULL)
+
+                  qc.boxplots = rnb.getOption("qc.boxplots")
+                  qc.barplots = rnb.getOption("qc.barplots")
+                  qc.negative.boxplot = rnb.getOption("qc.negative.boxplot")
+                  qc.coverage.plots = rnb.getOption("qc.coverage.plots")
+                  qc.coverage.histograms = rnb.getOption("qc.coverage.histograms")
+                  qc.coverage.violins = rnb.getOption("qc.coverage.violins")
+                  qc.coverage.threshold.plot = rnb.getOption("qc.coverage.threshold.plot")
+                  # covg.lists = NULL
+
+                { 
+                    if (!inherits(report, "Report")) {
+                        stop("invalid value for report")
+                    }
+                    if (!inherits(rnb.set, "RnBSet")) {
+                        stop("invalid value for rnb.set")
+                    }
+                    if (!parameter.is.flag(qc.boxplots)) {
+                        stop("invalid value for qc.boxplots; expected TRUE or FALSE")
+                    }
+                    if (!parameter.is.flag(qc.barplots)) {
+                        stop("invalid value for qc.barplots; expected TRUE or FALSE")
+                    }
+                    if (!parameter.is.flag(qc.negative.boxplot)) {
+                        stop("invalid value for qc.negative.boxplots; expected TRUE or FALSE")
+                    }
+                    if (!parameter.is.flag(qc.coverage.plots)) {
+                        stop("invalid value for qc.coverage.plots; expected TRUE or FALSE")
+                    }
+                    if (!parameter.is.flag(qc.coverage.histograms)) {
+                        stop("invalid value for qc.coverage.histograms; expected TRUE or FALSE")
+                    }
+                    if (!parameter.is.flag(qc.coverage.violins)) {
+                        stop("invalid value for qc.coverage.violins; expected TRUE or FALSE")
+                    }
+                    logger.start("Quality Control Section")
+                    report <- rnb.add.section(report, "Quality Control", NULL)
+                    txt <- NULL
+                    if (inherits(rnb.set, "RnBeadSet")) {
+                        if (is.null(qc(rnb.set))) {
+                            txt <- c("The supplied dataset contains no quality information, therefore, quality control graphics could ",
+                                "not be generated.")
+                            rnb.add.paragraph(report, txt)
+                            logger.info("No quality information present in the dataset")
+                        } else {
+                            txt <- "This section contains quality control plots and statistics for the methylation data."
+                            rnb.add.paragraph(report, txt)
+                            if (qc.boxplots) {
+                                txt <- c("Each box plot below shows the signal distribution of quality control probes across all ",
+                                  "samples. The control box plots are separated by control types. Detailed description of the ",
+                                  "control probes is given in the RnBeads vignette.")
+                                report <- rnb.add.section(report, "Quality Control Box Plots",
+                                  txt, level = 2)
+                                report <- RnBeads:::add.qc.boxplots(report, rnb.set)
+                                logger.status("Added quality control box plots")
+                            }
+                            if (qc.barplots) {
+                                txt <- c("The plots below visualize the exact signal levels at each quality control probe. Note that ",
+                                  "the scale is not standardized. Background signal is usualy at the level of 1000 to 2000.")
+                                report <- rnb.add.section(report, "Quality Control Bar Plots",
+                                  txt, level = 2)
+                                # report <- RnBeads:::add.qc.barplots(report, rnb.set, sample.batch.size = rnb.getOption("qc.sample.batch.size"))
+                                # function (report, object, sample.batch.size = 50)
+                                sample.batch.size = rnb.getOption("qc.sample.batch.size")  
+                                object = rnb.set
+                                { 
+                                    descr = "Quality control bar plots."
+                                    if (object@target == "probesEPIC") {
+                                        cmd <- rnb.get.annotation("controlsEPIC")
+                                        ctypes <- unique(cmd$Target)[unique(cmd$Target) %in%
+                                            rnb.infinium.control.targets("probesEPIC")[c(14,
+                                                4, 3, 15, 1:2, 12:13, 6, 11)]]
+                                    } else if (object@target == "probes450") {
+                                        cmd <- rnb.get.annotation("controls450")
+                                        ctypes <- unique(cmd$Target)[unique(cmd$Target) %in% 
+                                            rnb.infinium.control.targets("probes450")[c(13, 4, 
+                                                14, 3, 1:2, 11:12, 6)]]
+                                    } else if (object@target == "probes27") {
+                                        cmd <- rnb.get.annotation("controls27")
+                                        ctypes <- unique(cmd$Type)[unique(cmd$Type) %in% rnb.infinium.control.targets("probes27")[c(10, 
+                                            3, 2, 11, 1, 9, 6)]]
+                                    }
+                                    nsamp <- length(samples(object))
+                                    plot.names <- NULL
+                                    if (nsamp%%sample.batch.size == 1) {
+                                        sample.batch.size <- sample.batch.size - 5
+                                    }
+                                    portion.starts <- 0:(nsamp%/%sample.batch.size) * sample.batch.size + 
+                                        1
+                                    portion.ends <- portion.starts + sample.batch.size - 1
+                                    portion.ends[length(portion.ends)] <- nsamp
+                                    portions <- paste(portion.starts, portion.ends, sep = "-")
+                                    plots <- lapply(1:length(portions), function(portion.id) {
+                                        cplots <- lapply(ctypes, function(type) {
+                                            if (object@target == "probes450" || object@target == 
+                                                "probesEPIC") {
+                                                cmdt <- cmd[cmd[["Target"]] == type, ]
+                                                pn <- paste(type, 1:(dim(cmdt)[1]), sep = ".")
+                                            }
+                                            else if (object@target == "probes27") {
+                                                cmdt <- cmd[cmd[["Type"]] == type, ]
+                                                pn <- as.character(cmdt$Name)
+                                            }
+                                            if (portion.id == 1) 
+                                                plot.names <<- c(plot.names, pn)
+                                            plots <- lapply(pn, rnb.plot.control.barplot, rnb.set = object, 
+                                                sample.subset = portion.starts[portion.id]:portion.ends[portion.id], 
+                                                report = report, writeToFile = TRUE, numeric.names = TRUE, 
+                                                width = 8, height = 6, low.png = 100, high.png = 300, 
+                                                verbose = TRUE, name.prefix = portions[portion.id])
+                                            if (object@target == "probes450" || object@target == 
+                                                "probesEPIC") {
+                                                names(plots) <- paste(type, 1:(dim(cmdt)[1]))
+                                            }
+                                            else if (object@target == "probes27") {
+                                                names(plots) <- as.character(cmdt$Name)
+                                            }
+                                            plots
+                                        })
+                                        names(cplots) <- NULL
+                                        cplots <- unlist(cplots)
+                                        names(cplots) <- 1:length(plot.names)
+                                        cplots
+                                    })
+                                    plots <- unlist(plots)
+                                    sn <- list(`Samples #: ` = portions, `Control probe ID` = plot.names)
+                                    names(sn[[1]]) <- portions
+                                    if (object@target == "probes450" || object@target == "probesEPIC") {
+                                        names(sn[[2]]) <- 1:length(plot.names)
+                                    }
+                                    else if (object@target == "probes27") {
+                                        names(sn[[2]]) <- match(plot.names, cmd$Name[cmd$Type %in%
+                                            rnb.infinium.control.targets("probes27")[c(10, 3,
+                                                2, 11, 1, 9, 6)]])
+                                    }
+                                    report <- rnb.add.figure(report, description = descr, report.plots = plots,
+                                        setting.names = sn)
+                                } 
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                
+                                logger.status("Added quality control bar plots")
+                            }
+                            if (qc.negative.boxplot) {
+                                txt <- c("Negative control box plots visualize background intensity distributions of all analyzed ",
+                                  "samples. Samples with skewed distributions and high medians are likely to be of low quality and ",
+                                  "should be discarded from the analysis.")
+                                report <- rnb.add.section(report, "Negative Control Box Plots",
+                                  txt, level = 2)
+                                  report <- RnBeads:::add.negative.control.boxplot(report,
+                                    rnb.set, sample.batch.size = rnb.getOption("qc.sample.batch.size"))
+                                  logger.status("Added negative control boxplots")
+                              }
+                          }
+                      } else {
+                          if (qc.coverage.plots) {
+                              txt <- c("The sequencing coverage plots visualized effective read coverage at all CpGs in the sequenced ",
+                                  "genome. In case certain samples seem to have significantly decreased coverage, they should be excluded ",
+                                  "from the analysis.")
+                              report <- rnb.add.section(report, "Sequencing Coverage Plots",
+                                  txt, level = 2)
+                              report <- add.seq.coverage.plot(report, rnb.set,
+                                  covg.lists)
+                              logger.status("Added sequencing coverage boxplots")
+                          }
+                          if (qc.coverage.histograms) {
+                              txt <- c("The sequencing coverage histograms show distribution of coverage across all chromosomes. In case ",
+                                  "certain samples seem to have significantly decreased coverage, they should be excluded from the analysis.")
+                              report <- rnb.add.section(report, "Sequencing Coverage Histograms",
+                                  txt, level = 2)
+                              report <- add.seq.coverage.histograms(report, rnb.set)
+                              logger.status("Added sequencing coverage histograms")
+                          }
+                          report <- add.seq.coverage.num.sites.covg.tabs(report,
+                              rnb.set)
+                          logger.status("Added sample coverage section")
+                          if (qc.coverage.violins) {
+                              txt <- c("The plots below show an alternative approach to visualizing the coverage distribution.")
+                              report <- rnb.add.section(report, "Sequencing Coverage Violin Plots",
+                                  txt, level = 2)
+                              report <- add.seq.coverage.violins(report, rnb.set)
+                              logger.status("Added sequencing coverage violin plots")
+                          }
+                          rnb.cleanMem()
+                          if (length(qc.coverage.threshold.plot) != 0) {
+                              rplot <- rnb.plot.coverage.thresholds(rnb.set, qc.coverage.threshold.plot,
+                                  fname = "coverage_interrogated", report = report)
+                              dframe.coverages <- attr(rplot, "data")
+                              fname <- "coverage_interrogated.csv"
+                              write.csv(dframe.coverages, file = file.path(rnb.get.directory(report,
+                                  "data", TRUE), fname), row.names = FALSE)
+                              txt <- sprintf("%1.1f", range(dframe.coverages[dframe.coverages[,
+                                  2] == max(dframe.coverages[, 2]), 3]))
+                              txt <- c("In total, between ", txt[1], " and ", txt[2],
+                                  " million sites are covered in all samples of the ",
+                                  "dataset. The figure below shows the change in supports for different coverage thresholds. The exact ",
+                                  "values are available in a dedicated <a href=\"",
+                                  rnb.get.directory(report, "data"), "/", fname,
+                                  "\">comma-separated file</a> accompanying this report.")
+                              report <- rnb.add.section(report, "Sequencing Coverage Thresholds",
+                                  txt, level = 2)
+                              txt <- c("Line plot showing the number of CpG sites with a given support for different thresholds of ",
+                                  "minimal coverage. The support of a CpG site is the minimal number of samples that interrogate it.")
+                              report <- rnb.add.figure(report, txt, rplot)
+                              rm(rplot, dframe.coverages, fname)
+                          }
+                      }
+                      if (is.null(txt)) {
+                          txt <- "No quality control plots are generated because all respective options are disabled."
+                          rnb.add.paragraph(report, txt)
+                      }
+                      logger.completed()
+                      return(report)
+                  } 
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                
+                # return(report)
+            }
+
+
+
+
+
+            if (snp.options) {
+                report <- rnb.step.snp.probes(rnb.set, report)
+            }
+            if (.hasSlot(rnb.set, "inferred.covariates") && isTRUE(rnb.set@inferred.covariates$sex)) {
+                if (inherits(rnb.set, "RnBeadRawSet")) {
+                    signal.increases <- rnb.get.XY.shifts(rnb.set)
+                }
+                else if (inherits(rnb.set, "RnBiseqSet")) {
+                    signal.increases <- rnb.get.XY.shifts.biseq(rnb.set)
+                }
+                report <- rnb.section.sex.prediction(rnb.set, signal.increases, 
+                    report)
+            }
+            if (rnb.getOption("qc.cnv")) {
+                if (inherits(rnb.set, "RnBeadRawSet")) {
+                    report <- rnb.step.cnv(rnb.set, report)
+                }
+                else {
+                    logger.info("CNV estimation only applicable for RnBeadRawSet objects")
+                    txt <- "CNV estimation can only be performed for Illumina BeadChip data sets with signal intensity values available (RnBeadRawSet)"
+                    report <- rnb.add.section(report, "Copy number variation analysis", 
+                        description = txt)
+                }
+            }
+            module.complete(report, close.report, show.report)
+            invisible(report)
+        }
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+    }
+    if (rnb.getOption("preprocessing")) {
+        update.index(rnb.set, "preprocessing")
+        RnBeads:::rnb.cleanMem()
+        result <- rnb.run.preprocessing(rnb.set, dir.reports)
+        rnb.set <- result$rnb.set
+        rm(result)
+        RnBeads:::rnb.cleanMem()
+        if (save.rdata) {
+            save.rnb.set(rnb.set, file.path(dir.reports, "rnbSet_preprocessed"),
+                archive = rnb.getOption("gz.large.files"))
+        }
+    }
+    sample.count <- nrow(pheno(rnb.set))
+    if (nsites(rnb.set) * sample.count != 0) {
+        if (rnb.getOption("export.to.csv") || rnb.tracks.to.export(rnb.set)) {
+            update.index(rnb.set, "tracks_and_tables")
+            RnBeads:::rnb.cleanMem()
+            rnb.run.tnt(rnb.set, dir.reports)
+        }
+        if (rnb.getOption("inference")) {
+            update.index(rnb.set, "covariate_inference")
+            rnb.set <- rnb.run.inference(rnb.set, dir.reports)$rnb.set
+            if (save.rdata) {
+                save.rnb.set(rnb.set, file.path(dir.reports,
+                  "rnbSet_inference"), archive = rnb.getOption("gz.large.files"))
+            }
+        }
+        if (rnb.getOption("exploratory")) {
+             update.index(rnb.set, "exploratory_analysis")
+             RnBeads:::rnb.cleanMem()
+             rnb.run.exploratory(rnb.set, dir.reports)
+         }
+         if (rnb.getOption("differential")) {
+             update.index(rnb.set, "differential_methylation")
+             RnBeads:::rnb.cleanMem()
+             result.diffmeth <- rnb.run.differential(rnb.set,
+                 dir.reports)
+         }
+     }
+     update.index(rnb.set)
+     if (save.rdata) {
+         RnBeads:::rnb.cleanMem()
+         logger.start("Saving RData")
+         if (exists("result.diffmeth")) {
+             if (!is.null(result.diffmeth) && !is.null(result.diffmeth$diffmeth)) {
+                 diffmeth.path <- file.path(dir.reports, "differential_rnbDiffMeth")
+                 save.rnb.diffmeth(result.diffmeth$diffmeth, diffmeth.path)
+                 diffmeth.go.enrichment <- result.diffmeth$dm.go.enrich
+                 if (!is.null(diffmeth.go.enrichment)) {
+                   save(diffmeth.go.enrichment, file = file.path(diffmeth.path,
+                     "enrichment_go.RData"))
+                 }
+                 diffmeth.lola.enrichment <- result.diffmeth$dm.lola.enrich
+                 if (!is.null(diffmeth.lola.enrichment)) {
+                   save(diffmeth.lola.enrichment, file = file.path(diffmeth.path,
+                     "enrichment_lola.RData"))
+                 }
+             }
+             else {
+                 logger.warning("Differential methylation object not saved")
+             }
+         }
+         logger.completed()
+     }
+     RnBeads:::rnb.cleanMem()
+     logger.completed()
+     if (!is.null(logfile)) {
+         logger.close()
+     }
+     invisible(rnb.set)
+
+
+
+
+
+
+
+```
 
 
 # Save
