@@ -1,25 +1,31 @@
 import os 
+import re
+import string
 exec(open("config").read())
+rwversion=version # patch for bug in target shell (reserved word)
 
 def get_files(src_dir, src_suffix, dest_dir, dest_suffix):
   files = [f for f in os.listdir(os.path.expanduser(src_dir)) if re.match("^.*"+src_suffix+"$", f)]
   files = [x.replace(src_suffix, dest_suffix) for x in files ]
-  return [os.path.join(os.path.expanduser(dest_dir), f) for f in files]
+  return [os.path.expanduser(dest_dir+f) for f in files]
+
+bam_files = get_files("/home/fchuffar/projects/datashare/"+gse+"/raw/", "_val_1.fq.gz", "/home/fchuffar/projects/datashare/"+gse+"/"+species+"_"+annotation+"_"+rwversion+".", "_val_1_bismark_bt2_pe_sorted.bam")
+fastqc_files = get_files("/home/fchuffar/projects/datashare/"+gse+"/raw/", ".fastq.gz", "/home/fchuffar/projects/datashare/"+gse+"/raw/", "_fastqc.zip")
+trim_files = get_files("/home/fchuffar/projects/datashare/"+gse+"/raw/", "1.fastq.gz", "/home/fchuffar/projects/datashare/"+gse+"/raw/", "1_val_1.fq.gz")
+bw_files = get_files("/home/fchuffar/projects/datashare/"+gse+"/raw/", "_val_1.fq.gz", "/home/fchuffar/projects/datashare/"+gse+"/"+species+"_"+annotation+"_"+rwversion+".", "_val_1_bismark_bt2_pe_sorted_4_RPKM.bw")
+
+
 
 localrules: target
-
-
-rwversion=version # patch for bug in target shell (reserved word)
 rule target:
     threads: 1
     message: "-- Rule target completed. --"
     input: 
-      "/home/fchuffar/projects/datashare/genomes/"+species+"/UCSC/"+rwversion+"/Sequence/WholeGenomeFasta/Bisulfite_Genome",
-      fastqc_files = get_files("/home/fchuffar/projects/"+datashare+"/"+gse+"/raw", ".fastq.gz", "/home/fchuffar/projects/"+datashare+"/"+gse+"/raw", "_fastqc.zip"),
-      trim_files = get_files("/home/fchuffar/projects/"+datashare+"/"+gse+"/raw", "_R1_001.fastq.gz", "/home/fchuffar/projects/"+datashare+"/"+gse+"/raw", "_R1_001_val_1.fq.gz"),
-      bam_files = get_files("/home/fchuffar/projects/"+datashare+"/"+gse+"/raw", "_R1_001.fastq.gz", "/home/fchuffar/projects/"+datashare+"/"+gse+"/raw", "_R1_001_val_1_bismark_bt2_pe_sorted.bam"),
-      
-      
+      "/home/fchuffar/projects/datashare/genomes/"+species+"/"+annotation+"/"+rwversion+"/Sequence/WholeGenomeFasta/Bisulfite_Genome",
+      fastqc_files,
+      trim_files,
+      bam_files,
+      bw_files,
 
 
      # "/home/fchuffar/projects/datashare/GSE80959/raw/SRR3467835_1_fastqc.zip",
@@ -43,9 +49,9 @@ rule target:
      # "/home/fchuffar/projects/datashare/GSE80959/SRR3467843_1_trimmed_bismark_bt2_sortedbyname.bismark.cov.gz",
 
     shell:"""
-multiqc --force -o /home/fchuffar/projects/"""+datashare+"""/"""+gse+"""/ -n multiqc_rrbs \
-  /home/fchuffar/projects/"""+datashare+"""/"""+gse+"""/*.txt \
-  /home/fchuffar/projects/"""+datashare+"""/"""+gse+"""/raw/*_fastqc.zip \
+multiqc --force -o /home/fchuffar/projects/""datashare""/"""+gse+"""/ -n multiqc_rrbs \
+  /home/fchuffar/projects/""datashare""/"""+gse+"""/*.txt \
+  /home/fchuffar/projects/""datashare""/"""+gse+"""/raw/*_fastqc.zip \
 
 echo workflow \"align_heatshock\" completed at `date` 
           """
@@ -55,8 +61,8 @@ rule fastqc:
             html="{prefix}_fastqc.html"
     threads: 1
     shell:"""
-    export PATH="/summer/epistorage/miniconda3/bin:$PATH"
-    /summer/epistorage/miniconda3/bin/fastqc {input.fastqgz}
+export PATH="/summer/epistorage/miniconda3/envs/rrbs_env/bin/:$PATH"
+fastqc {input.fastqgz}
     """
               
 rule bigwig_coverage:
@@ -65,7 +71,7 @@ rule bigwig_coverage:
     output: "{prefix}_{width}_{normalize}.bw"
     threads: 4
     shell:"""
-export PATH="/summer/epistorage/miniconda3/bin:$PATH"
+export PATH="/summer/epistorage/miniconda3/envs/rrbs_env/bin/:$PATH"
 bamCoverage \
   -b {input.bam_file} \
   --numberOfProcessors `echo "$(({threads} * 2))"` \
@@ -77,34 +83,35 @@ bamCoverage \
     
 rule trim_with_trim_galore_PE:
     input:
-        fq_gz_f="{prefix}/{sample}_R1_001.fastq.gz",
-        fq_gz_r="{prefix}/{sample}_R2_001.fastq.gz",
+        fq_gz_f="{prefix}/{sample}_1.fastq.gz",
+        fq_gz_r="{prefix}/{sample}_2.fastq.gz",
     output:
-        trimed_fq_gz_f="{prefix}/{sample}_R1_001_val_1.fq.gz",
-        trimed_fq_gz_r="{prefix}/{sample}_R2_001_val_2.fq.gz"
+        trimed_fq_gz_f="{prefix}/{sample}_1_val_1.fq.gz",
+        trimed_fq_gz_r="{prefix}/{sample}_2_val_2.fq.gz"
     threads: 4
     shell:"""
-export PATH="/summer/epistorage/miniconda3/bin:/summer/epistorage/opt/bin:$PATH"
-trim_galore --cores {threads} --fastqc --paired --trim1 {input.fq_gz_f} {input.fq_gz_r} -o {wildcards.prefix}/
+export PATH="/summer/epistorage/miniconda3/envs/rrbs_env/bin/:$PATH"
+trim_galore --cores {threads} --fastqc --paired {input.fq_gz_f} {input.fq_gz_r} -o {wildcards.prefix}/
     """
 
 rule align_PE_with_bismark:
     input:
-      trimed_fq_gz_f="{prefix}/{sample}_R1_001_val_1.fq.gz",
-      trimed_fq_gz_r="{prefix}/{sample}_R2_001_val_2.fq.gz",
-      bisulfite_genome_dir="/home/fchuffar/projects/datashare/genomes/"+species+"/UCSC/"+rwversion+"/Sequence/WholeGenomeFasta/Bisulfite_Genome"
+      trimed_fq_gz_f="{prefix}/raw/{sample}_1_val_1.fq.gz",
+      trimed_fq_gz_r="{prefix}/raw/{sample}_2_val_2.fq.gz",
+      bisulfite_genome_dir="/home/fchuffar/projects/datashare/genomes/{species}/{annotation}/{version}/Sequence/WholeGenomeFasta/Bisulfite_Genome"
     output:
-      bam="{prefix}/{sample}_R1_001_val_1_bismark_bt2_pe_sorted.bam",
-      bai="{prefix}/{sample}_R1_001_val_1_bismark_bt2_pe_sorted.bam.bai"
+      bam="{prefix}/{species}_{annotation}_{version}.{sample}_1_val_1_bismark_bt2_pe_sorted.bam",
+      bai="{prefix}/{species}_{annotation}_{version}.{sample}_1_val_1_bismark_bt2_pe_sorted.bam.bai"
     threads: 16
     shell:    """
-export PATH="/summer/epistorage/miniconda3/bin:/summer/epistorage/opt/bin:$PATH"
+export PATH="/summer/epistorage/miniconda3/envs/rrbs_env/bin/:$PATH"
 cd {wildcards.prefix}/
-bismark --multicore `echo "$(({threads} / 2))"` -n 1 ~/projects/datashare/genomes/"""+species+"""/UCSC/"""+rwversion+"""/Sequence/WholeGenomeFasta/ \
+bismark --multicore `echo "$(({threads} / 2))"` -n 1 ~/projects/datashare/genomes/{wildcards.species}/{wildcards.annotation}/{wildcards.version}/Sequence/WholeGenomeFasta/ \
+  --prefix {wildcards.species}_{wildcards.annotation}_{wildcards.version} \
   -1 {input.trimed_fq_gz_f} \
-    -2 {input.trimed_fq_gz_r}
-samtools sort -@ {threads} -T /dev/shm/{wildcards.sample} -o {wildcards.prefix}/{wildcards.sample}_R1_001_val_1_bismark_bt2_pe_sorted.bam {wildcards.prefix}/{wildcards.sample}_R1_001_val_1_bismark_bt2_pe.bam
-# rm {wildcards.prefix}/{wildcards.sample}_R1_001_val_1_bismark_bt2_pe.bam
+  -2 {input.trimed_fq_gz_r}
+samtools sort -@ {threads} -T /dev/shm/{wildcards.sample} -o  {wildcards.prefix}/{wildcards.species}_{wildcards.annotation}_{wildcards.version}.{wildcards.sample}_1_val_1_bismark_bt2_pe_sorted.bam {wildcards.prefix}/{wildcards.species}_{wildcards.annotation}_{wildcards.version}.{wildcards.sample}_1_val_1_bismark_bt2_pe.bam
+rm {wildcards.prefix}/{wildcards.species}_{wildcards.annotation}_{wildcards.version}.{wildcards.sample}_1_val_1_bismark_bt2_pe.bam
 samtools index {output.bam}
               """
 
@@ -124,7 +131,7 @@ samtools index {output.bam}
 # # cd /summer/epistorage/datashare/temporize_rrbs_mgx/
 # # samtools sort -n -@ 16 -T /dev/shm/17_S7_L001_R1_001_trimmed_bismark_bt2_sorted -o 17_S7_L001_R1_001_trimmed_bismark_bt2_sortedbyname.bam 17_S7_L001_R1_001_trimmed_bismark_bt2_sorted.bam
 # # bismark_methylation_extractor --bedGraph --counts -s --no_overlap  --multicore 16 17_S7_L001_R1_001_trimmed_bismark_bt2_sortedbyname.bam
-# export PATH="/summer/epistorage/miniconda3/bin:/summer/epistorage/opt/bin:$PATH"
+# export PATH="/summer/epistorage/miniconda3/envs/rrbs_env/bin/:$PATH""
 # cd {wildcards.prefix}
 # samtools sort -n -@ {threads} -T /dev/shm/{wildcards.sample} -o {output.sortedbyname_bam} {input}
 # bismark_methylation_extractor --bedGraph --counts -s --no_overlap  --multicore {threads} {output.sortedbyname_bam}
@@ -136,15 +143,12 @@ samtools index {output.bam}
 
 rule bismark_genome_preparation:
     input:
-        genome_fasta_dir="{prefix}/genomes/{species}/UCSC/{index}/Sequence/WholeGenomeFasta",
+        genome_fasta_dir="{prefix}/genomes/{species}/{annotation}/{version}/WholeGenomeFasta/",
     output:
-        bisulfite_genome_dir=directory("{prefix}/genomes/{species}/UCSC/{index}/Sequence/WholeGenomeFasta/Bisulfite_Genome"),
+        bisulfite_genome_dir=directory("{prefix}/genomes/{species}/{annotation}/{version}/Sequence/WholeGenomeFasta/Bisulfite_Genome"),
     threads: 32
     shell:"""
-export PATH="/summer/epistorage/miniconda3/bin:/summer/epistorage/opt/bin:$PATH"
-# bismark_genome_preparation --parallel 8 --bowtie2 ~/projects/datashare/genomes/"""+species+"""/UCSC/"""+rwversion+"""/Sequence/WholeGenomeFasta/
-# ls -lha ~/projects/datashare/genomes/"""+species+"""/UCSC/"""+rwversion+"""/Sequence/WholeGenomeFasta/Bisulfite_Genome/*
-# ls -lha ~/projects/datashare/genomes/"""+species+"""/UCSC/"""+rwversion+"""/Sequence/WholeGenomeFasta/Bisulfite_Genome/*
+export PATH="/summer/epistorage/miniconda3/envs/rrbs_env/bin/:$PATH""
 bismark_genome_preparation --parallel `echo "$(({threads} / 2))"` --bowtie2 {input.genome_fasta_dir}
 ls -lha {output.bisulfite_genome_dir}
     """
@@ -162,14 +166,14 @@ ls -lha {output.bisulfite_genome_dir}
 #     threads: 4
 #     shell:"""
 # # trim_galore --cores 4 --fastqc /summer/epistorage/datashare/temporize_rrbs_mgx/raw/17_S7_L001_R1_001.fastq.gz
-# export PATH="/summer/epistorage/miniconda3/bin:/summer/epistorage/opt/bin:$PATH"
+# export PATH="/summer/epistorage/miniconda3/envs/rrbs_env/bin/:$PATH""
 # trim_galore --cores {threads} --fastqc {input.fq_gz} -o {wildcards.prefix}/
 #     """
 
 # rule align_SR_with_bismark:
 #     input:
 #       trimed_fq_gz="{prefix}/{sample}_trimmed.fq.gz",
-#       bisulfite_genome_dir="/home/fchuffar/projects/datashare/genomes/"+species+"/UCSC/"+rwversion+"/Sequence/WholeGenomeFasta/Bisulfite_Genome/",
+#       bisulfite_genome_dir="/home/fchuffar/projects/datashare/genomes/"+species+"/"+annotation+"/"+rwversion+"/Sequence/WholeGenomeFasta/Bisulfite_Genome/",
 #     output:
 #       report=    "{prefix}/{sample}_trimmed_bismark_bt2_SE_report.txt",
 #       bam=       "{prefix}/{sample}_trimmed_bismark_bt2.bam",
@@ -178,13 +182,13 @@ ls -lha {output.bisulfite_genome_dir}
 #     threads: 16
 #     shell:    """
 # # cd /summer/epistorage/datashare/temporize_rrbs_mgx/
-# # bismark --multicore 8 -n 1 /home/fchuffar/projects/datashare/genomes/"""+species+"""/UCSC/"""+rwversion+"""/Sequence/WholeGenomeFasta/ 17_S7_L001_R1_001_trimmed.fq.gz
+# # bismark --multicore 8 -n 1 /home/fchuffar/projects/datashare/genomes/"""+species+"""/"""+annotation+"""/"""+rwversion+"""/Sequence/WholeGenomeFasta/ 17_S7_L001_R1_001_trimmed.fq.gz
 # # samtools sort -@ 16 -T /dev/shm/17_S7_L001_R1_001_trimmed -o 17_S7_L001_R1_001_trimmed_bismark_bt2_sorted.bam 17_S7_L001_R1_001_trimmed_bismark_bt2.bam
 # # # rm 17_S7_L001_R1_001_trimmed_bismark_bt2.bam
 # # samtools index 17_S7_L001_R1_001_trimmed_bismark_bt2_sorted.bam
-# export PATH="/summer/epistorage/miniconda3/bin:/summer/epistorage/opt/bin:$PATH"
+# export PATH="/summer/epistorage/miniconda3/envs/rrbs_env/bin/:$PATH""
 # cd {wildcards.prefix}/
-# bismark --multicore `echo "$(({threads} / 2))"` -n 1 /home/fchuffar/projects/datashare/genomes/"""+species+"""/UCSC/"""+rwversion+"""/Sequence/WholeGenomeFasta/ {input.trimed_fq_gz}
+# bismark --multicore `echo "$(({threads} / 2))"` -n 1 /home/fchuffar/projects/datashare/genomes/"""+species+"""/"""+annotation+"""/"""+rwversion+"""/Sequence/WholeGenomeFasta/ {input.trimed_fq_gz}
 # samtools sort -@ {threads} -T /dev/shm/{wildcards.sample} -o {output.sorted_bam} {output.bam}
 # # rm {output.bam}
 # samtools index {output.sorted_bam}
@@ -203,7 +207,7 @@ ls -lha {output.bisulfite_genome_dir}
 # # cd /summer/epistorage/datashare/temporize_rrbs_mgx/
 # # samtools sort -n -@ 16 -T /dev/shm/17_S7_L001_R1_001_trimmed_bismark_bt2_sorted -o 17_S7_L001_R1_001_trimmed_bismark_bt2_sortedbyname.bam 17_S7_L001_R1_001_trimmed_bismark_bt2_sorted.bam
 # # bismark_methylation_extractor --bedGraph --counts -s --no_overlap  --multicore 16 17_S7_L001_R1_001_trimmed_bismark_bt2_sortedbyname.bam
-# export PATH="/summer/epistorage/miniconda3/bin:/summer/epistorage/opt/bin:$PATH"
+# export PATH="/summer/epistorage/miniconda3/envs/rrbs_env/bin/:$PATH""
 # cd {wildcards.prefix}
 # samtools sort -n -@ {threads} -T /dev/shm/{wildcards.sample} -o {output.sortedbyname_bam} {input}
 # bismark_methylation_extractor --bedGraph --counts -s --no_overlap  --multicore {threads} {output.sortedbyname_bam}
