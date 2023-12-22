@@ -49,9 +49,9 @@ rule target:
      # "/home/fchuffar/projects/datashare/GSE80959/SRR3467843_1_trimmed_bismark_bt2_sortedbyname.bismark.cov.gz",
 
     shell:"""
-multiqc --force -o /home/fchuffar/projects/""datashare""/"""+gse+"""/ -n multiqc_rrbs \
-  /home/fchuffar/projects/""datashare""/"""+gse+"""/*.txt \
-  /home/fchuffar/projects/""datashare""/"""+gse+"""/raw/*_fastqc.zip \
+multiqc --force -o /home/fchuffar/projects/datashare/"""+gse+"""/ -n multiqc_rrbs \
+  /home/fchuffar/projects/datashare/"""+gse+"""/*.txt \
+  /home/fchuffar/projects/datashare/"""+gse+"""/raw/*_fastqc.zip \
 
 echo workflow \"align_heatshock\" completed at `date` 
           """
