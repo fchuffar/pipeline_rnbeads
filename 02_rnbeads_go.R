@@ -1,6 +1,7 @@
 source("config")
 library(RnBeads)
-library(RnBeads.mm10)
+# library(RnBeads.mm10)
+library(paste0("RnBeads.", version), character.only=TRUE)
 
 
 analysis.name = gse
