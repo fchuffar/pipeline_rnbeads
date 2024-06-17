@@ -66,7 +66,10 @@ open ~/projects/datashare/${gse}/multiqc_rrbs.html
 
 # set design using design_rrbs.sh
 source ~/conda_config.sh
-conda activate idat2study_env # from dnamaging
+# conda create -n rnbeadsrrbs_env
+conda activate rnbeadsrrbs_env
+# mamba install -c anaconda -c bioconda -c conda-forge -c r r-base libopenblas bioconductor-geoquery bioconductor-affy bioconductor-biobase r-seqinr r-rcpparmadillo r-devtools r-fastmap r-matrix r-kernsmooth r-catools r-gtools r-nortest r-survival r-beanplot r-gplots bioconductor-rnbeads r-doparallel bioconductor-rnbeads.hg19 ghostscript bioconductor-watermelon bioconductor-illuminahumanmethylation450kanno.ilmn12.hg19 bioconductor-illuminahumanmethylationepicanno.ilm10b4.hg19 bioconductor-illuminahumanmethylation27kanno.ilmn12.hg19 snakemake=7.32.4 bioconductor-gostats r-hexbin r-wordcloud
+# devtools::install_github("fchuffar/epimedtools")
 # launch RnBeads
 ssh dahu
 oarsub --project epimed  -l /nodes=1,core=32,walltime=06:00:00 "export PATH=/summer/epistorage/miniconda3/bin:/summer/epistorage/opt/bin:\$PATH; cd ~/projects/${project}/results/${gse}; Rscript 02_rnbeads_go.R";

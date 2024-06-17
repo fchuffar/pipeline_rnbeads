@@ -22,7 +22,7 @@ RnBeads::rnb.options(
   filtering.sex.chromosomes.removal=TRUE,
   region.types=c("promoters","genes","tiling","cpgislands","sites"),
   region.aggregation="coverage.weighted",
-  gz.large.files=TRUE,
+  gz.large.files=FALSE,
   differential.enrichment.go = TRUE
   # differential.enrichment.lola = TRUE,
 ) # Options de l'analyse
@@ -35,6 +35,7 @@ rnb.run.analysis(
   dir.reports = dir.reports,
   data.source = data.source,
   data.type = data.type,
+  # save.rdata=FALSE,
   initialize.reports=TRUE
 ) 
 
