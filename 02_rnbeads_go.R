@@ -16,15 +16,17 @@ RnBeads::rnb.options(
   email = "florent.chuffart@univ-grenoble-alpes.fr",
   identifiers.column   = "sampleID",
   replicate.id.column = "treatment",
+  columns.pairing=c("treatment"="cofactor"),
   import.table.separator = ";",
   import.bed.style     = "bismarkCov",
   assembly             = version,
   filtering.sex.chromosomes.removal=TRUE,
   region.types=c("promoters","genes","tiling","cpgislands","sites"),
   region.aggregation="coverage.weighted",
-  gz.large.files=FALSE,
-  differential.enrichment.go = TRUE
-  # differential.enrichment.lola = TRUE,
+  differential.comparison.columns="treatment",
+  differential.enrichment.go = TRUE,
+  differential.enrichment.lola = TRUE,
+  gz.large.files=FALSE
 ) # Options de l'analyse
 num.cores = 32
 parallel.setup(num.cores)
