@@ -152,7 +152,7 @@ rm {wildcards.prefix}/{wildcards.sample}_R1_val_1_bismark_bt2_pe_sortedbyname.be
 
 rule bismark_genome_preparation:
     input:
-        genome_fasta_dir="{prefix}/genomes/{species}/{annotation}/{version}/WholeGenomeFasta/",
+        genome_fasta_dir="{prefix}/genomes/{species}/{annotation}/{version}/Sequence/WholeGenomeFasta/",
     output:
         bisulfite_genome_dir=directory("{prefix}/genomes/{species}/{annotation}/{version}/Sequence/WholeGenomeFasta/Bisulfite_Genome"),
     threads: 32
